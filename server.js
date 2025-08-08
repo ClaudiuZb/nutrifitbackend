@@ -19,17 +19,32 @@ const planRoutes = require('./routes/planRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// CORS simplu pentru testing - permite toate originile
+app.use(cors({
+  origin: true, // Permite toate originile
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Mărirea limitei pentru upload-uri de imagini
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(morgan('dev')); // Logging
+app.use(morgan('dev'));
+
+// Logging pentru debug
+app.use((req, res, next) => {
+  console.log(`📥 ${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log('Origin:', req.headers.origin || 'No origin');
+  console.log('User-Agent:', req.headers['user-agent']);
+  next();
+});
 
 // Conectare la MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Conectat la MongoDB'))
+  .then(() => console.log('✅ Conectat la MongoDB'))
   .catch(err => {
-    console.error('Eroare conectare MongoDB:', err.message);
+    console.error('❌ Eroare conectare MongoDB:', err.message);
     process.exit(1);
   });
 
@@ -40,18 +55,37 @@ app.use('/api/nutrition', nutritionRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/plans', planRoutes);
 
-// Rută de test
+// Rută de test - FOARTE IMPORTANTĂ pentru debug
 app.get('/api/status', (req, res) => {
   res.json({ 
     status: 'online', 
-    timestamp: new Date(),
-    environment: process.env.NODE_ENV
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    mongoStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    message: 'Backend NutriFit pe Render funcționează!'
+  });
+});
+
+// Rută root
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'NutriFit Backend API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      status: '/api/status',
+      auth: '/api/auth',
+      users: '/api/users',
+      nutrition: '/api/nutrition',
+      ai: '/api/ai',
+      plans: '/api/plans'
+    }
   });
 });
 
 // Middleware pentru gestionarea erorilor
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Error:', err.stack);
   res.status(err.statusCode || 500).json({
     status: 'error',
     message: err.message || 'Eroare internă server',
@@ -60,8 +94,10 @@ app.use((err, req, res, next) => {
 });
 
 // Pornire server
-app.listen(PORT, () => {
-  console.log(`Serverul rulează pe portul ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Serverul rulează pe portul ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📅 Server pornit la: ${new Date().toISOString()}`);
 });
 
-module.exports = app; // Export pentru testare
+module.exports = app;
